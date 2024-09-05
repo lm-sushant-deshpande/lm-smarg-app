@@ -5,43 +5,39 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 )
 
+const validAPIKey = "SMARG6002A2024LEMMA" // Replace with your actual API key
+const filePath = "/etc/appdmin/app/smarg/data"
+
 func audienceHandler(w http.ResponseWriter, r *http.Request) {
-	// URL to make the request
-	url := "https://smargtechnologies.in:3015/smarg_ai/siteConfiguration/125"
-
-	// Create a new request
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		http.Error(w, "Error creating HTTP request", http.StatusInternalServerError)
-		fmt.Println("Error creating HTTP request:", err)
+	// Ensure the request is a POST request
+	if r.Method != http.MethodPost {
+		http.Error(w, "Invalid request method, only POST is allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Add the API_Key header
-	req.Header.Set("API_Key", "SMARG6002A2024LEMMA") // Replace with your actual API key
-
-	// Send the request using an HTTP client
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		http.Error(w, "Error making HTTP request", http.StatusInternalServerError)
-		fmt.Println("Error making HTTP request:", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	// Check if the response status code is 200 (OK)
-	if resp.StatusCode != http.StatusOK {
-		http.Error(w, fmt.Sprintf("Error: received non-200 response code %d", resp.StatusCode), http.StatusInternalServerError)
-		fmt.Printf("Error: received non-200 response code %d\n", resp.StatusCode)
+	// Authenticate API_Key from the request header
+	apiKey := r.Header.Get("API_Key")
+	if apiKey == "" {
+		http.Error(w, "API_Key is missing", http.StatusUnauthorized)
+		fmt.Println("Unauthorized: API_Key is missing")
 		return
 	}
 
-	// Read the response body and write it to a file
-	fileName := "response.txt"
-	file, err := os.Create(fileName)
+	if apiKey != validAPIKey {
+		http.Error(w, "Invalid API_Key", http.StatusUnauthorized)
+		fmt.Println("Unauthorized: Invalid API_Key")
+		return
+	}
+
+	// Generate a timestamped filename
+	timestamp := time.Now().Format("20060102_150405") // Format as YYYYMMDD_HHMMSS
+	fileName := fmt.Sprintf("request_body_%s.txt", timestamp)
+
+	// Create the file with the timestamped name
+	file, err := os.Create(filePath + fileName)
 	if err != nil {
 		http.Error(w, "Error creating file", http.StatusInternalServerError)
 		fmt.Println("Error creating file:", err)
@@ -49,15 +45,16 @@ func audienceHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	// Copy the response body directly to the file
-	_, err = io.Copy(file, resp.Body)
+	// Copy the request body directly to the file
+	_, err = io.Copy(file, r.Body)
 	if err != nil {
 		http.Error(w, "Error writing to file", http.StatusInternalServerError)
 		fmt.Println("Error writing to file:", err)
 		return
 	}
+	defer r.Body.Close()
 
 	// Send a success message back to the API caller
-	fmt.Fprintf(w, "Response successfully written to %s\n", fileName)
-	fmt.Printf("Response successfully written to %s\n", fileName)
+	fmt.Fprintf(w, "Request body successfully written to %s\n", fileName)
+	fmt.Printf("Request body successfully written to %s\n", fileName)
 }
